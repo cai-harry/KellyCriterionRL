@@ -12,11 +12,14 @@ plt.style.use("ggplot")
 # %% Environment
 
 class Environment:
-    WIN_PROBABILITY = None
-    PAYOUT_RATIO = None
-    STARTING_MONEY = None
-    MAX_NUM_BETS = None
-    MAX_MONEY = None
+    NUM_STATES = None
+    NUM_ACTIONS = None
+
+    _MAX_MONEY = None
+    _WIN_PROBABILITY = None
+    _PAYOUT_RATIO = None
+    _STARTING_MONEY = None
+    _MAX_NUM_BETS = None
 
     _player_money = None
     _bets_remaining = None
@@ -28,19 +31,22 @@ class Environment:
                  starting_money: float = 25,
                  max_bets: int = 300,
                  max_money: int = 250):
-        self.WIN_PROBABILITY = win_probability
-        self.PAYOUT_RATIO = payout_ratio
-        self.STARTING_MONEY = starting_money
-        self.MAX_NUM_BETS = max_bets
-        self.MAX_MONEY = max_money
+        self._WIN_PROBABILITY = win_probability
+        self._PAYOUT_RATIO = payout_ratio
+        self._STARTING_MONEY = starting_money
+        self._MAX_NUM_BETS = max_bets
+        self._MAX_MONEY = max_money
         self.reset()
+
+        self.NUM_STATES = self._MAX_MONEY + 1  # 0 to max inclusive
+        self.NUM_ACTIONS = self._MAX_MONEY  # 0 to max exclusive; can't bet exactly max
 
     def get_state(self) -> float:
         return np.round(self._player_money)
 
     def reset(self) -> float:
-        self._player_money = self.STARTING_MONEY
-        self._bets_remaining = self.MAX_NUM_BETS
+        self._player_money = self._STARTING_MONEY
+        self._bets_remaining = self._MAX_NUM_BETS
         self._finished = False
         return self.get_state()
 
@@ -57,15 +63,15 @@ class Environment:
         self._player_money -= bet_size
 
         # flip the coin
-        won_bet = np.random.random() < self.WIN_PROBABILITY
+        won_bet = np.random.random() < self._WIN_PROBABILITY
         if won_bet:
             self._player_money += bet_size  # return the bet
-            self._player_money += bet_size * self.PAYOUT_RATIO  # also give the payout for winning
+            self._player_money += bet_size * self._PAYOUT_RATIO  # also give the payout for winning
 
         self._bets_remaining -= 1
 
-        if not 0 <= self._player_money <= self.MAX_MONEY:
-            self._player_money = np.clip(self._player_money, a_min=0, a_max=self.MAX_MONEY)
+        if not 0 <= self._player_money <= self._MAX_MONEY:
+            self._player_money = np.clip(self._player_money, a_min=0, a_max=self._MAX_MONEY)
             self._finished = True
 
         if self._bets_remaining <= 0:
@@ -114,16 +120,26 @@ test_environment()
 
 # %% Agent
 class Agent:
+    # Q-values for each [state, action] pair
     _Q: np.ndarray = None
 
-    def __init__(self, Q_values=None):
+    # Number of times each [state, action] pair has been visited
+    _N: np.ndarray = None
+
+    def __init__(self, env: Environment, Q_values: np.ndarray = None):
         if Q_values is not None:
             self._Q = Q_values
         else:
-            # todo: this makes assumptions about env
-            self._Q = np.full(shape=(251, 250), fill_value=-25)
+            # TODO: this makes assumptions about env
+            self._Q = np.zeros(shape=(env.NUM_STATES, env.NUM_ACTIONS))
+        self._N = np.zeros_like(self._Q)
 
-    def train(self, env, start_epsilon, episodes):
+    def train(self, env, episodes, epsilons_each_episode=None):
+
+        if epsilons_each_episode is None:
+            # use harmonic epsilon decay by default
+            epsilons_each_episode = np.ones_like(episodes) / (np.arange(len(episodes)) + 1)
+
         total_rewards = []
         N = np.zeros_like(self._Q)  # array recording number of times each Q-value has been visited
         for episode_idx in range(episodes):
@@ -134,12 +150,12 @@ class Agent:
             states_this_episode = [env.get_state()]  # should be just the starting state
             actions_this_episode = []
             rewards_this_episode = []
-            epsilon = start_epsilon - (episode_idx / episodes) * start_epsilon
+            epsilon = epsilons_each_episode[episode_idx]
             while not finished:
                 state_before_step = states_this_episode[-1]
                 action = self.get_action(state_before_step, epsilon)
                 actions_this_episode.append(action)
-                new_state, reward, finished = env.step(action)
+                new_state, reward, finished, debug_info = env.step(action)
                 states_this_episode.append(new_state)
                 rewards_this_episode.append(reward)
             total_reward_this_episode = sum(rewards_this_episode)
@@ -155,7 +171,9 @@ class Agent:
         # print(f"Training finished")
         return total_rewards
 
-    def get_action(self, state_idx, explore_probability):
+    def get_action(self,
+                   state_idx: int,
+                   explore_probability: float = 0):
         explore = np.random.random() < explore_probability
         if explore:
             action = np.random.randint(0, state_idx)
@@ -169,14 +187,17 @@ def test_agent(train_from_fresh, num_episodes=100):
     env = Environment()
 
     if train_from_fresh:
-        agent = Agent()
-        total_rewards = agent.train(env, start_epsilon=1, episodes=num_episodes)
+        agent = Agent(env)
+        epsilons = np.linspace(start=1, stop=0, num=num_episodes)
+        total_rewards = agent.train(env, episodes=num_episodes, epsilons_each_episode=epsilons)
 
         # plot running mean of rewards during training
-        total_rewards_running_mean = np.convolve(total_rewards, np.ones(20) / 20, mode='valid')
-        plt.plot(total_rewards_running_mean)
-        plt.plot(np.linspace(0.8 * 250, 0, num_episodes))
+        running_mean_N = 42
+        total_rewards_running_mean = np.convolve(total_rewards, np.ones(running_mean_N) / running_mean_N, mode='valid')
+        plt.plot(total_rewards_running_mean, label="Total rewards (running mean)")
+        plt.plot(epsilons * 225, label="Epsilon decay curve  * 225")
         plt.title("Rewards during training")
+        plt.legend()
         plt.show()
 
     else:
@@ -199,4 +220,4 @@ def test_agent(train_from_fresh, num_episodes=100):
     plt.show()
 
 
-test_agent(train_from_fresh=False)
+test_agent(train_from_fresh=True, num_episodes=10000)
