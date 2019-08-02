@@ -1,5 +1,6 @@
 # %% Setup
 import sys
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,66 +12,73 @@ plt.style.use("ggplot")
 # %% Environment
 
 class Environment:
-    _win_probability = None
-    _starting_money = None
-    _max_bets = None
+    WIN_PROBABILITY = None
+    PAYOUT_RATIO = None
+    STARTING_MONEY = None
+    MAX_NUM_BETS = None
+    MAX_MONEY = None
+
     _player_money = None
     _bets_remaining = None
     _finished = None
 
-    def __init__(self, win_probability: float = 0.6, starting_money: float = 25, max_bets: int = 300,
-                 print_msgs: bool = False):
-        self._win_probability = win_probability
-        self._starting_money = starting_money
-        self._max_bets = max_bets
+    def __init__(self,
+                 win_probability: float = 0.6,
+                 payout_ratio: float = 1,
+                 starting_money: float = 25,
+                 max_bets: int = 300,
+                 max_money: int = 250):
+        self.WIN_PROBABILITY = win_probability
+        self.PAYOUT_RATIO = payout_ratio
+        self.STARTING_MONEY = starting_money
+        self.MAX_NUM_BETS = max_bets
+        self.MAX_MONEY = max_money
         self.reset()
 
     def get_state(self) -> float:
         return np.round(self._player_money)
 
-    def reset(self):
-        self._player_money = self._starting_money
-        self._bets_remaining = self._max_bets
+    def reset(self) -> float:
+        self._player_money = self.STARTING_MONEY
+        self._bets_remaining = self.MAX_NUM_BETS
         self._finished = False
+        return self.get_state()
 
-    def step(self, bet_size: float, print_msgs: bool = False) -> float:
+    def step(self, bet_size: float):
 
         if self._finished:
             raise AttributeError("Game has finished")
         if bet_size > self._player_money:
             raise ValueError(f"Cannot bet ${bet_size} when player has ${self._player_money}")
 
-        if print_msgs:
-            print(
-                f"Player 1 bets ${bet_size} from a bankroll of ${self._player_money} ({np.round(100 * bet_size / self._player_money)}%)")
-
         player_money_before_bet = self._player_money
 
-        if np.random.random() < self._win_probability:
-            self._player_money = min(player_money_before_bet + bet_size, 250)
-            if print_msgs:
-                print(f"Player 1 WINS the bet")
-        else:
-            self._player_money = max(player_money_before_bet - bet_size, 0)
-            if print_msgs:
-                print(f"Player 1 LOSES the bet")
+        # place the bet
+        self._player_money -= bet_size
+
+        # flip the coin
+        won_bet = np.random.random() < self.WIN_PROBABILITY
+        if won_bet:
+            self._player_money += bet_size  # return the bet
+            self._player_money += bet_size * self.PAYOUT_RATIO  # also give the payout for winning
 
         self._bets_remaining -= 1
 
-        if self._player_money <= 0 or self._bets_remaining <= 0:
+        if not 0 <= self._player_money <= self.MAX_MONEY:
+            self._player_money = np.clip(self._player_money, a_min=0, a_max=self.MAX_MONEY)
             self._finished = True
 
-        if self._player_money >= 250:
-            self._player_money = 250
+        if self._bets_remaining <= 0:
             self._finished = True
 
-        return self._player_money, self._player_money - player_money_before_bet, self._finished
+        debug_info = {
+            "bet_size": bet_size,
+            "player_money_before_bet": player_money_before_bet,
+            "won_bet": won_bet,
+            "player_money_after_bet": self._player_money
+        }
 
-    def print_summary(self):
-        print(f"STATE\n"
-              f"\tMoney: ${self._player_money}\n"
-              f"\tBets remaining: {self._bets_remaining}\n"
-              )
+        return self._player_money, self._player_money - player_money_before_bet, self._finished, debug_info
 
 
 def test_environment():
@@ -85,8 +93,7 @@ def test_environment():
         finished = False
         while not finished:
             money = env.get_state()
-            money, reward, finished = env.step(bet_size=np.round(money * 0.2))
-            env.print_summary()
+            money, reward, finished, debug_info = env.step(bet_size=np.round(money * 0.2))
 
         final_money = env.get_state()
         total_payout += final_money
@@ -109,9 +116,12 @@ test_environment()
 class Agent:
     _Q: np.ndarray = None
 
-    def __init__(self):
-        # todo: this makes assumptions about env
-        self._Q = np.random.random_integers(low=-250, high=250, size=(251, 250))
+    def __init__(self, Q_values=None):
+        if Q_values is not None:
+            self._Q = Q_values
+        else:
+            # todo: this makes assumptions about env
+            self._Q = np.full(shape=(251, 250), fill_value=-25)
 
     def train(self, env, start_epsilon, episodes):
         total_rewards = []
@@ -155,17 +165,38 @@ class Agent:
         return action
 
 
-def test_agent(num_episodes):
+def test_agent(train_from_fresh, num_episodes=100):
     env = Environment()
-    agent = Agent()
-    total_rewards = agent.train(env, start_epsilon=1, episodes=num_episodes)
-    total_rewards_running_mean = np.convolve(total_rewards, np.ones(20)/20, mode='valid')
-    plt.plot(total_rewards_running_mean)
-    plt.plot(np.linspace(0.8*250, 0, num_episodes))
-    plt.show()
+
+    if train_from_fresh:
+        agent = Agent()
+        total_rewards = agent.train(env, start_epsilon=1, episodes=num_episodes)
+
+        # plot running mean of rewards during training
+        total_rewards_running_mean = np.convolve(total_rewards, np.ones(20) / 20, mode='valid')
+        plt.plot(total_rewards_running_mean)
+        plt.plot(np.linspace(0.8 * 250, 0, num_episodes))
+        plt.title("Rewards during training")
+        plt.show()
+
+    else:
+        agent = Agent(Q_values=np.loadtxt("Q.csv"))
+
+    # plot Q values
     np.savetxt("Q.csv", agent._Q, fmt='%.2f')
     plt.imshow(agent._Q)
+    plt.colorbar()
+    plt.title("Q values heatmap")
+    plt.show()
+
+    # plot policy
+    policy = [agent.get_action(s, explore_probability=0) for s in range(1, 250)]
+    plt.plot(policy, label="Learned greedy policy")
+    plt.title("Learned greedy policy (pure exploit mode, ie. epsilon=0)")
+    optimal_policy = [min(250 - s, 0.2 * s) for s in range(1, 250)]
+    plt.plot(optimal_policy, label="Optimal behaviour (Kelly Criterion)")
+    plt.legend()
     plt.show()
 
 
-test_agent(num_episodes=100000)
+test_agent(train_from_fresh=False)
