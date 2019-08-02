@@ -113,26 +113,35 @@ class Agent:
         # todo: this makes assumptions about env
         self._Q = np.random.random_integers(low=-250, high=250, size=(251, 250))
 
-    def train(self, env, lr, gamma, start_epsilon, episodes):
+    def train(self, env, start_epsilon, episodes):
         total_rewards = []
-        for episode_idx in tqdm(range(episodes)):
+        N = np.zeros_like(self._Q)  # array recording number of times each Q-value has been visited
+        for episode_idx in range(episodes):
+
+            # record a single episode
             env.reset()
             finished = False
+            states_this_episode = [env.get_state()]  # should be just the starting state
+            actions_this_episode = []
             rewards_this_episode = []
-            step = 0
             epsilon = start_epsilon - (episode_idx / episodes) * start_epsilon
             while not finished:
-                state_before_step = env.get_state()
+                state_before_step = states_this_episode[-1]
                 action = self.get_action(state_before_step, epsilon)
+                actions_this_episode.append(action)
                 new_state, reward, finished = env.step(action)
+                states_this_episode.append(new_state)
                 rewards_this_episode.append(reward)
-                delta = lr * (
-                        reward + gamma * np.max(self._Q[state_before_step]) - self._Q[state_before_step, action])
-                self._Q[state_before_step, action] += delta
-                step += 1
             total_reward_this_episode = sum(rewards_this_episode)
-            # print(f"Total reward for episode {episode_idx + 1}/{episodes}: {total_reward_this_episode}")
+            print(f"Total reward for episode {episode_idx + 1}/{episodes}: {total_reward_this_episode}")
             total_rewards.append(total_reward_this_episode)
+
+            # Monte Carlo control: update N and Q arrays
+            for s, a in zip(states_this_episode, actions_this_episode):
+                N[s, a] += 1
+                delta = (total_reward_this_episode - self._Q[s, a]) / N[s, a]
+                self._Q[s, a] += delta
+
         # print(f"Training finished")
         return total_rewards
 
@@ -146,14 +155,17 @@ class Agent:
         return action
 
 
-def test_agent():
+def test_agent(num_episodes):
     env = Environment()
     agent = Agent()
-    total_rewards = agent.train(env, lr=0.2, gamma=0.9, start_epsilon=0.8, episodes=100000)
-    plt.plot(total_rewards)
-    plt.plot(np.linspace(0.8*250, 0, 1000))
+    total_rewards = agent.train(env, start_epsilon=1, episodes=num_episodes)
+    total_rewards_running_mean = np.convolve(total_rewards, np.ones(20)/20, mode='valid')
+    plt.plot(total_rewards_running_mean)
+    plt.plot(np.linspace(0.8*250, 0, num_episodes))
     plt.show()
     np.savetxt("Q.csv", agent._Q, fmt='%.2f')
+    plt.imshow(agent._Q)
+    plt.show()
 
 
-test_agent()
+test_agent(num_episodes=100000)
