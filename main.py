@@ -149,7 +149,7 @@ class Agent:
                    explore_probability: float = 0):
         explore = np.random.random() < explore_probability
         if explore:
-            action = np.random.randint(0, state_idx+1)
+            action = np.random.randint(0, state_idx + 1)
         else:  # exploit
             action = np.argmax(self._Q[state_idx, :state_idx + 1])
 
@@ -187,12 +187,17 @@ class Agent:
                 delta = (total_reward_this_episode - self._Q[s, a]) / self._N[s, a]
                 self._Q[s, a] += delta
 
+        np.savetxt("Q.csv", self._Q, fmt='%.2f')
+        np.savetxt("N.csv", self._N, fmt='%d')
+
         return total_rewards
 
     def plot_policy(self, optimal_policy=None):
         policy = [self.get_action(s, explore_probability=0) for s in range(250)]
-        plt.plot(policy, label="Learned greedy policy")
-        plt.title("Learned greedy policy (pure exploit mode, ie. epsilon=0)")
+        plt.plot(policy, label="Learned policy")
+        plt.title("Learned policy (exploit mode, ie. epsilon=0)")
+        plt.xlabel("Bankroll ($)")
+        plt.ylabel("Bet size ($)")
         if optimal_policy is not None:
             plt.plot(optimal_policy, label="Optimal behaviour (Kelly Criterion)")
         plt.legend()
@@ -200,27 +205,29 @@ class Agent:
 
     def plot_Q_values(self):
         # plot Q values
-        np.savetxt("Q.csv", self._Q, fmt='%.2f')
         plt.imshow(self._Q)
         plt.colorbar()
         plt.title("Q values heatmap")
+        plt.xlabel("Action, ie. bet size ($)")
+        plt.ylabel("State, ie. bankroll ($)")
         plt.show()
 
     def plot_N_values(self):
         # plot number of times each state is visited
-        np.savetxt("N.csv", self._N, fmt='%d')
         plt.imshow(np.log10(self._N))
         plt.colorbar()
         plt.title("N values heatmap (displaying log10(N) instead of raw N)")
+        plt.xlabel("Action, ie. bet size ($)")
+        plt.ylabel("State, ie. bankroll ($)")
         plt.show()
 
 
-def test_agent(train_from_fresh, num_episodes, exploring_start=False):
+def test_agent(train_from_fresh, num_episodes, epsilons, exploring_start=False):
     env = Environment()
 
     if train_from_fresh:
         agent = Agent(env)
-        epsilons = np.linspace(start=1, stop=0, num=num_episodes)
+
         total_rewards = agent.train(env, episodes=num_episodes, epsilons_each_episode=epsilons,
                                     exploring_start=exploring_start)
 
@@ -232,6 +239,8 @@ def test_agent(train_from_fresh, num_episodes, exploring_start=False):
         # plot epsilon decay curve
         plt.plot(epsilons * np.max(total_rewards_running_mean), label="Epsilon decay curve (not to scale)")
         plt.title("Rewards during training")
+        plt.xlabel("Episode")
+        plt.ylabel("Reward ($)")
         plt.legend()
         plt.show()
 
@@ -247,5 +256,31 @@ def test_agent(train_from_fresh, num_episodes, exploring_start=False):
     )
 
 
-# Note that 10,000 episodes takes ~1 sec
-test_agent(train_from_fresh=True, num_episodes=50*60*10000, exploring_start=True)
+# %% Define picket fence epsilon function
+def epsilon_picket_fence(num_episodes: int, explore_ratio: float, repeats: int):
+    repeating_phase_length = num_episodes // repeats
+    single_explore_phase_length = int(repeating_phase_length * explore_ratio)
+    single_exploit_phase_length = repeating_phase_length - single_explore_phase_length
+
+    single_repeating_phase = np.concatenate([
+        np.ones(single_explore_phase_length),
+        np.zeros(single_exploit_phase_length)
+    ])
+
+    return np.tile(single_repeating_phase, repeats)
+
+
+# %% Run training
+
+DESIRED_TRAIN_NUM_SECONDS = 5 * 60
+APPROX_EPISODES_PER_SECOND = 8000
+train_num_episodes = APPROX_EPISODES_PER_SECOND * DESIRED_TRAIN_NUM_SECONDS
+
+EPSILON_FN = epsilon_picket_fence(num_episodes=train_num_episodes,
+                                  explore_ratio=0.9,
+                                  repeats=5)
+
+test_agent(train_from_fresh=True,
+           num_episodes=train_num_episodes,
+           epsilons=EPSILON_FN,
+           exploring_start=True)
