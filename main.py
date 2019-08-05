@@ -220,4 +220,4 @@ def test_agent(train_from_fresh, num_episodes=100):
     plt.show()
 
 
-test_agent(train_from_fresh=True, num_episodes=10000)
+test_agent(train_from_fresh=True, num_episodes=2000000) # 2 million
