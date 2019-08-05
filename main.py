@@ -141,7 +141,6 @@ class Agent:
             epsilons_each_episode = np.ones_like(episodes) / (np.arange(len(episodes)) + 1)
 
         total_rewards = []
-        N = np.zeros_like(self._Q)  # array recording number of times each Q-value has been visited
         for episode_idx in range(episodes):
 
             # record a single episode
@@ -164,8 +163,8 @@ class Agent:
 
             # Monte Carlo control: update N and Q arrays
             for s, a in zip(states_this_episode, actions_this_episode):
-                N[s, a] += 1
-                delta = (total_reward_this_episode - self._Q[s, a]) / N[s, a]
+                self._N[s, a] += 1
+                delta = (total_reward_this_episode - self._Q[s, a]) / self._N[s, a]
                 self._Q[s, a] += delta
 
         # print(f"Training finished")
@@ -194,10 +193,17 @@ def test_agent(train_from_fresh, num_episodes=100):
         # plot running mean of rewards during training
         running_mean_N = 42
         total_rewards_running_mean = np.convolve(total_rewards, np.ones(running_mean_N) / running_mean_N, mode='valid')
-        plt.plot(total_rewards_running_mean, label="Total rewards (running mean)")
+        plt.plot(total_rewards_running_mean, label="Total rewards (running mean with N=100)")
         plt.plot(epsilons * 225, label="Epsilon decay curve  * 225")
         plt.title("Rewards during training")
         plt.legend()
+        plt.show()
+
+        # plot number of times each state is visited
+        np.savetxt("N.csv", agent._N, fmt='%d')
+        plt.imshow(np.log10(agent._N))
+        plt.colorbar()
+        plt.title("N values heatmap (displaying log10(N) instead of raw N)")
         plt.show()
 
     else:
@@ -220,4 +226,4 @@ def test_agent(train_from_fresh, num_episodes=100):
     plt.show()
 
 
-test_agent(train_from_fresh=True, num_episodes=2000000) # 2 million
+test_agent(train_from_fresh=True, num_episodes=10000)
