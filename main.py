@@ -80,7 +80,7 @@ class Environment:
 
         self._bets_remaining -= 1
 
-        if not 0 <= self._player_money <= self._MAX_MONEY:
+        if not 0 < self._player_money < self._MAX_MONEY:
             self._player_money = np.clip(self._player_money, a_min=0, a_max=self._MAX_MONEY)
             self._finished = True
 
@@ -144,6 +144,17 @@ class Agent:
             self._Q = np.zeros(shape=(env.NUM_STATES, env.NUM_ACTIONS))
         self._N = np.zeros_like(self._Q)
 
+    def get_action(self,
+                   state_idx: int,
+                   explore_probability: float = 0):
+        explore = np.random.random() < explore_probability
+        if explore:
+            action = np.random.randint(0, state_idx+1)
+        else:  # exploit
+            action = np.argmax(self._Q[state_idx, :state_idx + 1])
+
+        return action
+
     def train(self, env, episodes, epsilons_each_episode=None, exploring_start=False):
 
         if epsilons_each_episode is None:
@@ -151,10 +162,10 @@ class Agent:
             epsilons_each_episode = np.ones_like(episodes) / (np.arange(len(episodes)) + 1)
 
         total_rewards = []
-        for episode_idx in range(episodes):
+        for episode_idx in tqdm(range(episodes)):
 
             # record a single episode
-            env.reset(exploring_start)
+            env.reset(random_starting_money=exploring_start)
             finished = False
             states_this_episode = [env.get_state()]  # should be just the starting state
             actions_this_episode = []
@@ -168,7 +179,6 @@ class Agent:
                 states_this_episode.append(new_state)
                 rewards_this_episode.append(reward)
             total_reward_this_episode = sum(rewards_this_episode)
-            print(f"Total reward for episode {episode_idx + 1}/{episodes}: {total_reward_this_episode}")
             total_rewards.append(total_reward_this_episode)
 
             # Monte Carlo control: update N and Q arrays
@@ -177,63 +187,65 @@ class Agent:
                 delta = (total_reward_this_episode - self._Q[s, a]) / self._N[s, a]
                 self._Q[s, a] += delta
 
-        # print(f"Training finished")
         return total_rewards
 
-    def get_action(self,
-                   state_idx: int,
-                   explore_probability: float = 0):
-        explore = np.random.random() < explore_probability
-        if explore:
-            action = np.random.randint(0, state_idx)
-        else:  # exploit
-            action = np.argmax(self._Q[state_idx, :state_idx])
+    def plot_policy(self, optimal_policy=None):
+        policy = [self.get_action(s, explore_probability=0) for s in range(250)]
+        plt.plot(policy, label="Learned greedy policy")
+        plt.title("Learned greedy policy (pure exploit mode, ie. epsilon=0)")
+        if optimal_policy is not None:
+            plt.plot(optimal_policy, label="Optimal behaviour (Kelly Criterion)")
+        plt.legend()
+        plt.show()
 
-        return action
+    def plot_Q_values(self):
+        # plot Q values
+        np.savetxt("Q.csv", self._Q, fmt='%.2f')
+        plt.imshow(self._Q)
+        plt.colorbar()
+        plt.title("Q values heatmap")
+        plt.show()
+
+    def plot_N_values(self):
+        # plot number of times each state is visited
+        np.savetxt("N.csv", self._N, fmt='%d')
+        plt.imshow(np.log10(self._N))
+        plt.colorbar()
+        plt.title("N values heatmap (displaying log10(N) instead of raw N)")
+        plt.show()
 
 
-def test_agent(train_from_fresh, num_episodes=100, exploring_start=False):
+def test_agent(train_from_fresh, num_episodes, exploring_start=False):
     env = Environment()
 
     if train_from_fresh:
         agent = Agent(env)
         epsilons = np.linspace(start=1, stop=0, num=num_episodes)
-        total_rewards = agent.train(env, episodes=num_episodes, epsilons_each_episode=epsilons, exploring_start=exploring_start)
+        total_rewards = agent.train(env, episodes=num_episodes, epsilons_each_episode=epsilons,
+                                    exploring_start=exploring_start)
 
         # plot running mean of rewards during training
         running_mean_N = num_episodes // 100
         total_rewards_running_mean = np.convolve(total_rewards, np.ones(running_mean_N) / running_mean_N, mode='valid')
         plt.plot(total_rewards_running_mean, label="Total rewards (running mean with N=100)")
-        plt.plot(epsilons * 225, label="Epsilon decay curve  * 225")
+
+        # plot epsilon decay curve
+        plt.plot(epsilons * np.max(total_rewards_running_mean), label="Epsilon decay curve (not to scale)")
         plt.title("Rewards during training")
         plt.legend()
         plt.show()
 
-        # plot number of times each state is visited
-        np.savetxt("N.csv", agent._N, fmt='%d')
-        plt.imshow(np.log10(agent._N))
-        plt.colorbar()
-        plt.title("N values heatmap (displaying log10(N) instead of raw N)")
-        plt.show()
+        agent.plot_N_values()
 
     else:
         agent = Agent(Q_values=np.loadtxt("Q.csv"))
 
-    # plot Q values
-    np.savetxt("Q.csv", agent._Q, fmt='%.2f')
-    plt.imshow(agent._Q)
-    plt.colorbar()
-    plt.title("Q values heatmap")
-    plt.show()
+    agent.plot_Q_values()
 
-    # plot policy
-    policy = [agent.get_action(s, explore_probability=0) for s in range(1, 250)]
-    plt.plot(policy, label="Learned greedy policy")
-    plt.title("Learned greedy policy (pure exploit mode, ie. epsilon=0)")
-    optimal_policy = [min(250 - s, 0.2 * s) for s in range(1, 250)]
-    plt.plot(optimal_policy, label="Optimal behaviour (Kelly Criterion)")
-    plt.legend()
-    plt.show()
+    agent.plot_policy(
+        optimal_policy=[min(250 - s, 0.2 * s) for s in range(1, 250)]
+    )
 
 
-test_agent(train_from_fresh=True, num_episodes=10000, exploring_start=True)
+# Note that 10,000 episodes takes ~1 sec
+test_agent(train_from_fresh=True, num_episodes=50*60*10000, exploring_start=True)
