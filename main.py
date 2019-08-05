@@ -42,10 +42,20 @@ class Environment:
         self.NUM_ACTIONS = self._MAX_MONEY  # 0 to max exclusive; can't bet exactly max
 
     def get_state(self) -> float:
-        return np.round(self._player_money)
+        return int(np.round(self._player_money))
 
-    def reset(self) -> float:
-        self._player_money = self._STARTING_MONEY
+    def reset(self, random_starting_money: bool = False) -> float:
+        if random_starting_money:
+            # draw from triangular distribution from 1 to N such that each m is m-times more likely to be chosen than 1
+            # this is because each m has m actions associated - we are trying to sample the Q-space evenly
+            random_trianglular = np.random.triangular(
+                left=1,
+                mode=self._MAX_MONEY,
+                right=self._MAX_MONEY
+            )
+            self._player_money = int(np.floor(random_trianglular))
+        else:
+            self._player_money = self._STARTING_MONEY
         self._bets_remaining = self._MAX_NUM_BETS
         self._finished = False
         return self.get_state()
@@ -134,7 +144,7 @@ class Agent:
             self._Q = np.zeros(shape=(env.NUM_STATES, env.NUM_ACTIONS))
         self._N = np.zeros_like(self._Q)
 
-    def train(self, env, episodes, epsilons_each_episode=None):
+    def train(self, env, episodes, epsilons_each_episode=None, exploring_start=False):
 
         if epsilons_each_episode is None:
             # use harmonic epsilon decay by default
@@ -144,7 +154,7 @@ class Agent:
         for episode_idx in range(episodes):
 
             # record a single episode
-            env.reset()
+            env.reset(exploring_start)
             finished = False
             states_this_episode = [env.get_state()]  # should be just the starting state
             actions_this_episode = []
@@ -182,16 +192,16 @@ class Agent:
         return action
 
 
-def test_agent(train_from_fresh, num_episodes=100):
+def test_agent(train_from_fresh, num_episodes=100, exploring_start=False):
     env = Environment()
 
     if train_from_fresh:
         agent = Agent(env)
         epsilons = np.linspace(start=1, stop=0, num=num_episodes)
-        total_rewards = agent.train(env, episodes=num_episodes, epsilons_each_episode=epsilons)
+        total_rewards = agent.train(env, episodes=num_episodes, epsilons_each_episode=epsilons, exploring_start=exploring_start)
 
         # plot running mean of rewards during training
-        running_mean_N = 42
+        running_mean_N = num_episodes // 100
         total_rewards_running_mean = np.convolve(total_rewards, np.ones(running_mean_N) / running_mean_N, mode='valid')
         plt.plot(total_rewards_running_mean, label="Total rewards (running mean with N=100)")
         plt.plot(epsilons * 225, label="Epsilon decay curve  * 225")
@@ -226,4 +236,4 @@ def test_agent(train_from_fresh, num_episodes=100):
     plt.show()
 
 
-test_agent(train_from_fresh=True, num_episodes=10000)
+test_agent(train_from_fresh=True, num_episodes=10000, exploring_start=True)
