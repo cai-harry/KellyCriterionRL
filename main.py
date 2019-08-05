@@ -274,13 +274,13 @@ def epsilon_picket_fence(num_episodes: int, explore_ratio: float, repeats: int):
 
 DESIRED_TRAIN_NUM_SECONDS = 5 * 60
 APPROX_EPISODES_PER_SECOND = 8000
-train_num_episodes = APPROX_EPISODES_PER_SECOND * DESIRED_TRAIN_NUM_SECONDS
 
-EPSILON_FN = epsilon_picket_fence(num_episodes=train_num_episodes,
+train_num_episodes = APPROX_EPISODES_PER_SECOND * DESIRED_TRAIN_NUM_SECONDS
+epsilon_fn = epsilon_picket_fence(num_episodes=train_num_episodes,
                                   explore_ratio=0.9,
                                   repeats=5)
 
 test_agent(train_from_fresh=True,
            num_episodes=train_num_episodes,
-           epsilons=EPSILON_FN,
+           epsilons=epsilon_fn,
            exploring_start=True)
