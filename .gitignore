@@ -208,3 +208,13 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+
+
+
+
+
+# Project specific
+# Logs for tensorboard
+logs/ #

@@ -72,7 +72,7 @@ def _run_training(train_from_fresh, num_episodes, epsilons, exploring_start=Fals
         agent = Agent(env)
 
         total_rewards = agent.train(env,
-                                    episodes=num_episodes, epsilons_each_episode=epsilons,
+                                    num_episodes=num_episodes, epsilons_each_episode=epsilons,
                                     exploring_start=exploring_start, plot_training_rewards=True)
 
         agent.save_parameters()
