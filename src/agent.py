@@ -1,26 +1,28 @@
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
+from .context import MODELS_DIR
 from .environment import Environment
 
 plt.style.use("ggplot")
 
 
 class Agent:
+
     # Q-values for each [state, action] pair
     _Q: np.ndarray = None
 
     # Number of times each [state, action] pair has been visited
     _N: np.ndarray = None
 
-    def __init__(self, env: Environment, Q_values: np.ndarray = None):
-        if Q_values is not None:
-            self._Q = Q_values
-        else:
-            # TODO: this makes assumptions about env
-            self._Q = np.zeros(shape=(env.NUM_STATES, env.NUM_ACTIONS))
+    def __init__(self, env, load_from_directory: Path = None, load_N: bool = True):
+        self._Q = np.zeros(shape=(env.NUM_STATES, env.NUM_ACTIONS))
         self._N = np.zeros_like(self._Q)
+        if load_from_directory is not None:
+            self.load_parameters(load_from_directory, load_N)
 
     def get_action(self,
                    state_idx: int,
@@ -33,7 +35,7 @@ class Agent:
 
         return action
 
-    def train(self, env, episodes, epsilons_each_episode=None, exploring_start=False):
+    def train(self, env, episodes, epsilons_each_episode=None, exploring_start=False, plot_training_rewards=True):
 
         if epsilons_each_episode is None:
             # use harmonic epsilon decay by default
@@ -65,8 +67,8 @@ class Agent:
                 delta = (total_reward_this_episode - self._Q[s, a]) / self._N[s, a]
                 self._Q[s, a] += delta
 
-        np.savetxt("models/Q.csv", self._Q, fmt='%.2f')
-        np.savetxt("models/N.csv", self._N, fmt='%d')
+        if plot_training_rewards:
+            plot_rewards_during_training(total_rewards, epsilons_each_episode)
 
         return total_rewards
 
@@ -98,3 +100,30 @@ class Agent:
         plt.xlabel("Action, ie. bet size ($)")
         plt.ylabel("State, ie. bankroll ($)")
         plt.show()
+
+    def save_parameters(self, to_directory: Path = MODELS_DIR / "latest"):
+        # make save directory if it doesn't exist
+        to_directory.mkdir(parents=True, exist_ok=True)
+        # save in created directory csv's
+        np.savetxt(to_directory / "Q.csv", self._Q, fmt='%.2f')
+        np.savetxt(to_directory / "N.csv", self._N, fmt='%d')
+
+    def load_parameters(self, from_directory: Path, load_N: bool):
+        self._Q = np.loadtxt(from_directory / "Q.csv")
+        if load_N:
+            self._N = np.loadtxt(from_directory / "N.csv")
+
+
+def plot_rewards_during_training(total_rewards: np.ndarray, epsilons: np.ndarray):
+    # plot running mean of rewards during training
+    running_mean_N = max(1, len(total_rewards) // 100)
+    total_rewards_running_mean = np.convolve(total_rewards, np.ones(running_mean_N) / running_mean_N, mode='valid')
+    plt.plot(total_rewards_running_mean, label="Total rewards (running mean with N=100)")
+
+    # plot epsilon decay curve
+    plt.plot(epsilons * np.max(total_rewards_running_mean), label="Epsilon decay curve (not to scale)")
+    plt.title("Rewards during training")
+    plt.xlabel("Episode")
+    plt.ylabel("Reward ($)")
+    plt.legend()
+    plt.show()

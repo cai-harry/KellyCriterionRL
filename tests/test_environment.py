@@ -1,31 +1,82 @@
-import numpy as np
-
 from src.environment import Environment
 
 
-def test_environment():
-    # test for Environment
-    wins = 0
-    busts = 0
-    total_payout = 0
-    num_episodes = 1000
+def test_get_state():
+    expected_state = 22
+    env = Environment(starting_money=expected_state)
+    actual_state = env.get_state()
+    assert expected_state == actual_state, \
+        f"Expected state={expected_state}, got state={actual_state}"
 
-    for i in range(num_episodes):
-        env = Environment()
-        finished = False
-        while not finished:
-            money = env.get_state()
-            money, reward, finished, debug_info = env.step(bet_size=np.round(money * 0.2))
 
-        final_money = env.get_state()
-        total_payout += final_money
-        if final_money >= 250:
-            print("Player 1 reached maximum")
-            wins += 1
-        if final_money <= 0:
-            print("Player 1 went bust")
-            busts += 1
+def test_reset():
+    env = Environment(starting_money=20, max_bets=200)
+    env.step(bet_size=10)
+    env.reset()
+    assert env.get_state() == 20
+    assert env._bets_remaining == 200
 
-    print()
-    print(f"Player 1 reached maximum {wins} times of {num_episodes}, and went bust {busts} times")
-    print(f"The average payout was ${total_payout / num_episodes}")
+
+def test_step():
+    test_cases = [
+        {
+            "summary": "1. Player bets $10 and wins",
+            "env_args": {
+                "win_probability": 1
+            },
+            "bet_size": 10,
+            "expected_state": 35,
+            "expected_reward": 10,
+            "expected_finished": False,
+        },
+        {
+            "summary": "2. Player bets $10 and loses",
+            "env_args": {
+                "win_probability": 0
+            },
+            "bet_size": 10,
+            "expected_state": 15,
+            "expected_reward": -10,
+            "expected_finished": False,
+        },
+        {
+            "summary": "3. Player goes bankrupt",
+            "env_args": {
+                "win_probability": 0
+            },
+            "bet_size": 25,
+            "expected_state": 0,
+            "expected_reward": -25,
+            "expected_finished": True,
+        },
+        {
+            "summary": "4. Player reaches max_money and wins",
+            "env_args": {
+                "win_probability": 1,
+                "max_money": 30,
+            },
+            "bet_size": 5,
+            "expected_state": 30,
+            "expected_reward": 5,
+            "expected_finished": True,
+        },
+        {
+            "summary": "5. Player reaches max_bets and game ends",
+            "env_args": {
+                "max_bets": 1
+            },
+            "bet_size": 0,
+            "expected_state": 25,
+            "expected_reward": 0,
+            "expected_finished": True,
+        },
+    ]
+
+    for case in test_cases:
+        env = Environment(**case['env_args'])
+        state, reward, finished, debug_info = env.step(bet_size=case['bet_size'])
+        assert state == case['expected_state'], \
+            f"Expected state={case['expected_state']}, got state={state}"
+        assert reward == case['expected_reward'], \
+            f"Expected reward={case['expected_reward']}, got reward={reward}"
+        assert finished == case['expected_finished']
