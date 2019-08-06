@@ -130,7 +130,7 @@ class TrainingLogger:
                  epsilons_each_episode: np.ndarray,
                  plot_total_rewards: bool,
                  use_tensorboard: bool,
-                 total_rewards_running_mean_N: int = None
+                 total_rewards_running_mean_N: int = 3
                  ):
         self.num_episodes = num_episodes
         self.plot_total_rewards = plot_total_rewards
@@ -140,10 +140,7 @@ class TrainingLogger:
         self._total_rewards = []
 
         self._total_rewards_running_mean = []
-        if total_rewards_running_mean_N is not None:
-            self._running_mean_N = total_rewards_running_mean_N
-        else:
-            self._running_mean_N = max(1, num_episodes // 100)
+        self._running_mean_N = total_rewards_running_mean_N
 
         self._tqdm_progress_bar = tqdm(total=num_episodes)
 
@@ -161,7 +158,7 @@ class TrainingLogger:
         self._tqdm_progress_bar.update(1)
 
         self._tensorboard_writer.add_scalar("Total Episode Reward", total_reward_this_episode, episode_idx)
-
+        self._tensorboard_writer.add_scalar("Epsilon", epsilon_this_episode, episode_idx)
 
     def on_training_end(self):
         if self.plot_total_rewards:
