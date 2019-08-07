@@ -12,7 +12,9 @@ gym.envs.registration.register(
 
 class Environment(gym.Env):
     """
-    The coinflips environment. Should implement the OpenAI Gym API.
+    The coin flipping betting game described in the project docs.
+
+    Should implement the OpenAI Gym API.
     """
 
     def __init__(self,

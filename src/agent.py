@@ -13,6 +13,12 @@ plt.style.use("ggplot")
 
 
 class Agent:
+    """
+    The RL agent that should hopefully learn to navigate the coin flipping environment.
+
+    Currently uses model-free Monte Carlo learning.
+    """
+
     # Q-values for each [state, action] pair
     _Q: np.ndarray = None
 
@@ -28,9 +34,9 @@ class Agent:
         if load_from_directory is not None:
             self.load_parameters(load_from_directory, load_N)
 
-    def get_action(self,
-                   state_idx: int,
-                   explore_probability: float = 0):
+    def act(self,
+            state_idx: int,
+            explore_probability: float = 0) -> int:
         explore = np.random.random() < explore_probability
         if explore:
             action = np.random.randint(0, state_idx + 1)
@@ -40,11 +46,25 @@ class Agent:
         return action
 
     def train(self,
-              env, num_episodes,
-              epsilons_each_episode=None,
-              exploring_start=False,
-              plot_training_rewards=True,
-              use_tensorboard=False):
+              env: Environment,
+              num_episodes: int,
+              epsilons_each_episode: np.ndarray = None,
+              exploring_start: bool = False,
+              plot_training_rewards: bool = True,
+              use_tensorboard: bool = False):
+
+        """
+        Train the agent over the specified number of episodes.
+
+        :param env: The environment whose rewards the agent should maximise
+        :param num_episodes: The number of episodes to run
+        :param epsilons_each_episode: The exploration probability for each episode.
+            Uses linear decay by default.
+        :param exploring_start: Whether to reset the environment to a different starting state each time.
+        :param plot_training_rewards: Whether to make a plot of rewards after training is complete.
+        :param use_tensorboard: Whether to record rewards and other stats to Tensorboard.
+        :return:
+        """
 
         if epsilons_each_episode is None:
             # linear decay by default
@@ -67,7 +87,7 @@ class Agent:
 
         logger.on_training_end()
 
-    def _run_episode(self, env, epsilon, exploring_start):
+    def _run_episode(self, env: Environment, epsilon: float, exploring_start: bool):
         """Record a single episode of experience"""
         env.reset(random_starting_money=exploring_start)
         finished = False
@@ -76,7 +96,7 @@ class Agent:
         rewards_this_episode = []
         while not finished:
             state_before_step = states_this_episode[-1]
-            action = self.get_action(state_before_step, epsilon)
+            action = self.act(state_before_step, epsilon)
             actions_this_episode.append(action)
             new_state, reward, finished, debug_info = env.step(action)
             rewards_this_episode.append(reward)
@@ -91,8 +111,8 @@ class Agent:
             delta = (episode_total_reward - self._Q[s, a]) / self._N[s, a]
             self._Q[s, a] += delta
 
-    def plot_policy(self, optimal_policy=None):
-        policy = [self.get_action(s, explore_probability=0) for s in range(250)]
+    def plot_policy(self, optimal_policy=None) -> ():
+        policy = [self.act(s, explore_probability=0) for s in range(250)]
         plt.plot(policy, label="Learned policy")
         plt.title("Learned policy (exploit mode, ie. epsilon=0)")
         plt.xlabel("Bankroll ($)")
@@ -102,7 +122,7 @@ class Agent:
         plt.legend()
         plt.show()
 
-    def plot_Q_values(self):
+    def plot_Q_values(self) -> ():
         # plot Q values
         plt.imshow(self._Q)
         plt.colorbar()
@@ -111,7 +131,7 @@ class Agent:
         plt.ylabel("State, ie. bankroll ($)")
         plt.show()
 
-    def plot_N_values(self):
+    def plot_N_values(self) -> ():
         # plot number of times each state is visited
         plt.imshow(np.log10(self._N))
         plt.colorbar()
@@ -120,14 +140,20 @@ class Agent:
         plt.ylabel("State, ie. bankroll ($)")
         plt.show()
 
-    def save_parameters(self, to_directory: Path = MODELS_DIR / "latest"):
+    def save_parameters(self, to_directory: Path = MODELS_DIR / "latest") -> ():
+        """
+        Save N and Q values to the given directory.
+        """
         # make save directory if it doesn't exist
         to_directory.mkdir(parents=True, exist_ok=True)
         # save in created directory csv's
         np.savetxt(to_directory / "Q.csv", self._Q, fmt='%.2f')
         np.savetxt(to_directory / "N.csv", self._N, fmt='%d')
 
-    def load_parameters(self, from_directory: Path, load_N: bool):
+    def load_parameters(self, from_directory: Path, load_N: bool) -> ():
+        """
+        Load N and Q values from the given directory.
+        """
         self._Q = np.loadtxt(from_directory / "Q.csv")
         if load_N:
             self._N = np.loadtxt(from_directory / "N.csv")
@@ -162,10 +188,10 @@ class TrainingLogger:
             self._tensorboard_writer = tensorboardX.SummaryWriter(
                 log_dir=LOGS_DIR / strftime("%Y-%m-%d@%H-%M-%S"))
 
-    def print(self, msg):
+    def print(self, msg: str):
         self._tqdm_progress_bar.write(msg)
 
-    def on_episode_end(self, episode_idx, total_reward_this_episode, epsilon_this_episode):
+    def on_episode_end(self, episode_idx: int, total_reward_this_episode: float, epsilon_this_episode: float):
         self._total_rewards.append(total_reward_this_episode)
 
         mean_of_last_N = np.mean(
