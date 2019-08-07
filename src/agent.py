@@ -44,41 +44,49 @@ class Agent:
               use_tensorboard=False):
 
         if epsilons_each_episode is None:
-            # use harmonic epsilon decay by default
-            epsilons_each_episode = np.ones_like(num_episodes) / (np.arange(num_episodes) + 1)
+            # linear decay by default
+            epsilons_each_episode = np.linspace(start=1, stop=0, num=num_episodes)
 
         logger = TrainingLogger(num_episodes, epsilons_each_episode, plot_training_rewards, use_tensorboard)
 
-        for episode_idx in range(num_episodes):
+        try:
+            for episode_idx, epsilon in zip(range(num_episodes), epsilons_each_episode):
+                actions, states, rewards = self._run_episode(
+                    env, epsilon, exploring_start)
+                self._update_parameters(actions, states, rewards)
+                logger.on_episode_end(episode_idx, rewards, epsilon)
 
-            # record a single episode
-            env.reset(random_starting_money=exploring_start)
-            finished = False
-            states_this_episode = [env.get_state()]  # should be just the starting state
-            actions_this_episode = []
-            rewards_this_episode = []
-            epsilon = epsilons_each_episode[episode_idx]
-            while not finished:
-                state_before_step = states_this_episode[-1]
-                action = self.get_action(state_before_step, epsilon)
-                actions_this_episode.append(action)
-                new_state, reward, finished, debug_info = env.step(action)
-                rewards_this_episode.append(reward)
-                states_this_episode.append(new_state)
-            total_reward_this_episode = sum(rewards_this_episode)
-
-            logger.on_episode_end(episode_idx, total_reward_this_episode, epsilon)
-
-            # Monte Carlo control: update N and Q arrays
-            for s, a in zip(states_this_episode, actions_this_episode):
-                self._N[s, a] += 1
-                delta = (total_reward_this_episode - self._Q[s, a]) / self._N[s, a]
-                self._Q[s, a] += delta
+        except KeyboardInterrupt:
+            logger.print(f"Ended early at episode {episode_idx} due to KeyboardInterrupt")
 
         # save N and Q values to the default directory for the latest trained model
         self.save_parameters()
 
         logger.on_training_end()
+
+    def _run_episode(self, env, epsilon, exploring_start):
+        """Record a single episode of experience"""
+        env.reset(random_starting_money=exploring_start)
+        finished = False
+        states_this_episode = [env.get_state()]  # should be just the starting state
+        actions_this_episode = []
+        rewards_this_episode = []
+        while not finished:
+            state_before_step = states_this_episode[-1]
+            action = self.get_action(state_before_step, epsilon)
+            actions_this_episode.append(action)
+            new_state, reward, finished, debug_info = env.step(action)
+            rewards_this_episode.append(reward)
+            states_this_episode.append(new_state)
+        total_reward_this_episode = sum(rewards_this_episode)
+        return actions_this_episode, states_this_episode, total_reward_this_episode
+
+    def _update_parameters(self, episode_actions, episode_states, episode_total_reward):
+        """Monte Carlo control: update N and Q arrays"""
+        for s, a in zip(episode_states, episode_actions):
+            self._N[s, a] += 1
+            delta = (episode_total_reward - self._Q[s, a]) / self._N[s, a]
+            self._Q[s, a] += delta
 
     def plot_policy(self, optimal_policy=None):
         policy = [self.get_action(s, explore_probability=0) for s in range(250)]
@@ -137,7 +145,7 @@ class TrainingLogger:
                  ):
         self.num_episodes = num_episodes
         self.plot_total_rewards = plot_total_rewards
-        self.use_tensorboard = use_tensorboard
+        self.using_tensorboard = use_tensorboard
         self.epsilons = epsilons_each_episode
 
         self._total_rewards = []
@@ -147,8 +155,12 @@ class TrainingLogger:
 
         self._tqdm_progress_bar = tqdm(total=num_episodes)
 
-        self._tensorboard_writer = tensorboardX.SummaryWriter(
-            log_dir=LOGS_DIR / strftime("%Y-%m-%d@%H-%M-%S"))
+        if use_tensorboard:
+            self._tensorboard_writer = tensorboardX.SummaryWriter(
+                log_dir=LOGS_DIR / strftime("%Y-%m-%d@%H-%M-%S"))
+
+    def print(self, msg):
+        self._tqdm_progress_bar.write(msg)
 
     def on_episode_end(self, episode_idx, total_reward_this_episode, epsilon_this_episode):
         self._total_rewards.append(total_reward_this_episode)
@@ -160,8 +172,9 @@ class TrainingLogger:
 
         self._tqdm_progress_bar.update(1)
 
-        self._tensorboard_writer.add_scalar("Total Episode Reward", total_reward_this_episode, episode_idx)
-        self._tensorboard_writer.add_scalar("Epsilon", epsilon_this_episode, episode_idx)
+        if self.using_tensorboard:
+            self._tensorboard_writer.add_scalar("Total Episode Reward", total_reward_this_episode, episode_idx)
+            self._tensorboard_writer.add_scalar("Epsilon", epsilon_this_episode, episode_idx)
 
     def on_training_end(self):
         if self.plot_total_rewards:

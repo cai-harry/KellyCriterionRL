@@ -14,21 +14,20 @@ APPROX_EPISODES_PER_SECOND = 8000
 
 def test_train():
     train_num_episodes = APPROX_EPISODES_PER_SECOND * DESIRED_TRAIN_NUM_SECONDS
-    epsilon_fn = _epsilon_picket_fence(num_episodes=train_num_episodes,
-                                       explore_ratio=0.9,
-                                       repeats=5)
 
     # run a quick session of training and make plots.
-    trained_agent = _run_training(train_from_fresh=True,
-                                  num_episodes=train_num_episodes,
-                                  epsilons=epsilon_fn,
-                                  exploring_start=True)
+    env = Environment()
+    agent = Agent(env)
+    agent.train(env,
+                num_episodes=train_num_episodes,
+                plot_training_rewards=False)
 
     # assert the trained agent has different Q values to a freshly instantiated one.
-    fresh_agent = Agent(Environment())
+    fresh_env = Environment()
+    fresh_agent = Agent(fresh_env)
     assert not np.array_equal(
         fresh_agent._Q,
-        trained_agent._Q
+        agent._Q
     )
 
 
@@ -63,43 +62,3 @@ def test_save_parameters():
         new_agent = Agent(env, load_from_directory=save_dir)
         assert new_agent._Q[3, 1] == 1.0
         assert new_agent._N[3, 1] == 1
-
-
-def _run_training(train_from_fresh, num_episodes, epsilons, exploring_start=False):
-    env = Environment()
-
-    if train_from_fresh:
-        agent = Agent(env)
-
-        total_rewards = agent.train(env,
-                                    num_episodes=num_episodes, epsilons_each_episode=epsilons,
-                                    exploring_start=exploring_start, plot_training_rewards=True)
-
-        agent.save_parameters()
-
-        agent.plot_N_values()
-
-    else:
-        agent = Agent(env, load_from_directory=MODELS_DIR / "latest")
-
-    agent.plot_Q_values()
-
-    agent.plot_policy(
-        # also plot what the agent's policy would look like it it followed Kelly Criterion exactly
-        optimal_policy=[min(250 - s, 0.2 * s) for s in range(1, 250)]
-    )
-
-    return agent
-
-
-def _epsilon_picket_fence(num_episodes: int, explore_ratio: float, repeats: int):
-    repeating_phase_length = num_episodes // repeats
-    single_explore_phase_length = int(repeating_phase_length * explore_ratio)
-    single_exploit_phase_length = repeating_phase_length - single_explore_phase_length
-
-    single_repeating_phase = np.concatenate([
-        np.ones(single_explore_phase_length),
-        np.zeros(single_exploit_phase_length)
-    ])
-
-    return np.tile(single_repeating_phase, repeats)
