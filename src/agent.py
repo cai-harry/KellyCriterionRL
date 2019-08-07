@@ -75,6 +75,9 @@ class Agent:
                 delta = (total_reward_this_episode - self._Q[s, a]) / self._N[s, a]
                 self._Q[s, a] += delta
 
+        # save N and Q values to the default directory for the latest trained model
+        self.save_parameters()
+
         logger.on_training_end()
 
     def plot_policy(self, optimal_policy=None):
@@ -145,7 +148,7 @@ class TrainingLogger:
         self._tqdm_progress_bar = tqdm(total=num_episodes)
 
         self._tensorboard_writer = tensorboardX.SummaryWriter(
-                log_dir=LOGS_DIR/strftime("%Y-%m-%d@%H-%M-%S"))
+            log_dir=LOGS_DIR / strftime("%Y-%m-%d@%H-%M-%S"))
 
     def on_episode_end(self, episode_idx, total_reward_this_episode, epsilon_this_episode):
         self._total_rewards.append(total_reward_this_episode)
