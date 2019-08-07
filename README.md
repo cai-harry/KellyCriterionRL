@@ -1,5 +1,7 @@
 # KellyCriterionRL
 
+[![Build status](https://travis-ci.com/cai-harry/KellyCriterion.svg?master)](https://travis-ci.com/cai-harry)
+
 From [Wikipedia](https://en.wikipedia.org/wiki/Kelly_criterion):
 
 The Kelly Criterion is to bet a predetermined fraction of assets and can be counterintuitive. In one study,<sup>[[5]](https://en.wikipedia.org/wiki/Kelly_criterion#cite_note-5)[[6]](https://en.wikipedia.org/wiki/Kelly_criterion#cite_note-6)</sup> each participant was given $25 and asked to bet on a coin that would land heads 60% of the time. Participants had 30 minutes to play, so could place about 300 bets, and the prizes were capped at $250. Behavior was far from optimal. "Remarkably, 28% of the participants went bust, and the average payout was just $91. Only 21% of the participants reached the maximum. 18 of the 61 participants bet everything on one toss, while two-thirds gambled on tails at some stage in the experiment." Using the Kelly criterion and based on the odds in the experiment, the right approach would be to bet 20% of the pot on each throw (see first example below). If losing, the size of the bet gets cut; if winning, the stake increases.
