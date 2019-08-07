@@ -12,7 +12,11 @@ I wondered if a reinforcement learning agent could be trained to perform better 
 
 ## Training runs
 
-### 8th August 2019
+### 6th August 2019
+
+See [this notebook](notebooks/2019-08-06.ipynb)
+
+### 5th August 2019
 
 After a training run of 30 million episodes, with randomly sampled starts
 
