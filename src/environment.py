@@ -1,19 +1,19 @@
+import gym
+from gym.utils import seeding
 import numpy as np
 
+GYM_ENV_ID = "coinflips-v0"
 
-class Environment:
-    NUM_STATES = None
-    NUM_ACTIONS = None
+gym.envs.registration.register(
+    id=GYM_ENV_ID,
+    entry_point="src.environment:Environment"
+)
 
-    _MAX_MONEY = None
-    _WIN_PROBABILITY = None
-    _PAYOUT_RATIO = None
-    _STARTING_MONEY = None
-    _MAX_NUM_BETS = None
 
-    _player_money = None
-    _bets_remaining = None
-    _finished = None
+class Environment(gym.Env):
+    """
+    The coinflips environment. Should implement the OpenAI Gym API.
+    """
 
     def __init__(self,
                  win_probability: float = 0.6,
@@ -28,27 +28,11 @@ class Environment:
         self._MAX_MONEY = max_money
         self.reset()
 
-        self.NUM_STATES = self._MAX_MONEY + 1  # 0 to max inclusive
-        self.NUM_ACTIONS = self._MAX_MONEY  # 0 to max exclusive; can't bet exactly max
-
-    def get_state(self) -> float:
-        return int(np.round(self._player_money))
-
-    def reset(self, random_starting_money: bool = False) -> float:
-        if random_starting_money:
-            # draw from triangular distribution from 1 to N such that each m is m-times more likely to be chosen than 1
-            # this is because each m has m actions associated - we are trying to sample the Q-space evenly
-            random_trianglular = np.random.triangular(
-                left=1,
-                mode=self._MAX_MONEY,
-                right=self._MAX_MONEY
-            )
-            self._player_money = int(np.floor(random_trianglular))
-        else:
-            self._player_money = self._STARTING_MONEY
-        self._bets_remaining = self._MAX_NUM_BETS
-        self._finished = False
-        return self.get_state()
+        # these attributes are required to implement the gym.Env API
+        num_actions = self._MAX_MONEY  # 0 to max exclusive; can't bet exactly max
+        num_states = self._MAX_MONEY + 1  # 0 to max inclusive
+        self.action_space = gym.spaces.Discrete(num_actions)
+        self.observation_space = gym.spaces.Discrete(num_states)
 
     def step(self, bet_size: float):
 
@@ -84,4 +68,43 @@ class Environment:
             "player_money_after_bet": self._player_money
         }
 
-        return self._player_money, self._player_money - player_money_before_bet, self._finished, debug_info
+        # gym.Env API expects the returned reward value to be a float
+        reward = float(self._player_money - player_money_before_bet)
+
+        return self.get_state(), reward, self._finished, debug_info
+
+    def reset(self, random_starting_money: bool = False) -> float:
+        if random_starting_money:
+            # draw from triangular distribution from 1 to N such that each m is m-times more likely to be chosen than 1
+            # this is because each m has m actions associated - we are trying to sample the Q-space evenly
+            random_trianglular = np.random.triangular(
+                left=1,
+                mode=self._MAX_MONEY,
+                right=self._MAX_MONEY
+            )
+            self._player_money = int(np.floor(random_trianglular))
+        else:
+            self._player_money = self._STARTING_MONEY
+        self._bets_remaining = self._MAX_NUM_BETS
+        self._finished = False
+        return self.get_state()
+
+    def render(self, mode='human'):
+        state_str = f"Game finished: {self._finished}\n" \
+                    f"Player money: ${self._player_money}" \
+                    f"Bets taken: {self._MAX_NUM_BETS - self._bets_remaining}/{self._MAX_NUM_BETS}"
+        if mode == "human":
+            print(state_str)
+        elif mode == "ansi":
+            return state_str
+        else:
+            super(Environment, self).render(mode=mode)
+
+    def seed(self, seed=None):
+        # copied and pasted from gym mountain-car example
+        # https://github.com/openai/gym/blob/master/gym/envs/classic_control/mountain_car.py
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
+
+    def get_state(self) -> float:
+        return np.round(self._player_money, decimals=2)

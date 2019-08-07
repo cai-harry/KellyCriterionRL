@@ -19,8 +19,11 @@ class Agent:
     # Number of times each [state, action] pair has been visited
     _N: np.ndarray = None
 
-    def __init__(self, env, load_from_directory: Path = None, load_N: bool = True):
-        self._Q = np.zeros(shape=(env.NUM_STATES, env.NUM_ACTIONS))
+    def __init__(self, env: Environment, load_from_directory: Path = None, load_N: bool = True):
+        num_states = env.observation_space.n
+        num_actions = env.action_space.n
+
+        self._Q = np.zeros(shape=(num_states, num_actions))
         self._N = np.zeros_like(self._Q)
         if load_from_directory is not None:
             self.load_parameters(load_from_directory, load_N)

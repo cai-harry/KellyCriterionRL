@@ -1,4 +1,16 @@
-from src.environment import Environment
+import gym
+
+from src.environment import Environment, GYM_ENV_ID
+
+
+def test_gym_env_compatibility():
+    # Is this environment instantiable by calling gym.make(GYM_ENV_ID)?
+    env = gym.make(GYM_ENV_ID)
+    assert env is not None
+
+    # Have the main API methods been correctly implemented?
+    # ie. can a dummy agent complete an episode in this environment without raising an exception?
+    _run_dummy_agent_episode(env)
 
 
 def test_get_state():
@@ -80,3 +92,27 @@ def test_step():
         assert reward == case['expected_reward'], \
             f"Expected reward={case['expected_reward']}, got reward={reward}"
         assert finished == case['expected_finished']
+
+
+def _run_dummy_agent_episode(env):
+    """Inspiration: https://github.com/openai/gym/blob/master/examples/agents/random_agent.py"""
+    agent = DummyAgent()
+    episode_count = 2
+    reward = 0
+    done = False
+    for i in range(episode_count):
+        ob = env.reset()
+        while True:
+            action = agent.act(ob, reward, done)
+            ob, reward, done, debug_info = env.step(action)
+            if done:
+                break
+    env.close()
+
+
+class DummyAgent(object):
+    """
+    A dummy agent designed to work with a gym.Env
+    """
+    def act(self, observation, reward, done):
+        return 0
