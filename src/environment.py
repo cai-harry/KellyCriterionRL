@@ -1,3 +1,5 @@
+from typing import List
+
 import gym
 from gym.utils import seeding
 import numpy as np
@@ -20,7 +22,7 @@ class Environment(gym.Env):
     def __init__(self,
                  win_probability: float = 0.6,
                  payout_ratio: float = 1,
-                 starting_money: float = 25,
+                 starting_money: int = 25,
                  max_bets: int = 300,
                  max_money: int = 250):
         self._WIN_PROBABILITY = win_probability
@@ -28,7 +30,8 @@ class Environment(gym.Env):
         self._STARTING_MONEY = starting_money
         self._MAX_NUM_BETS = max_bets
         self._MAX_MONEY = max_money
-        self.reset()
+
+        self.reset(random_starting_money=False)
 
         # these attributes are required to implement the gym.Env API
         num_actions = self._MAX_MONEY  # 0 to max exclusive; can't bet exactly max
@@ -93,7 +96,7 @@ class Environment(gym.Env):
 
     def render(self, mode='human'):
         state_str = f"Game finished: {self._finished}\n" \
-                    f"Player money: ${self._player_money}" \
+                    f"Player money: ${self._player_money}\n" \
                     f"Bets taken: {self._MAX_NUM_BETS - self._bets_remaining}/{self._MAX_NUM_BETS}"
         if mode == "human":
             print(state_str)
@@ -110,3 +113,8 @@ class Environment(gym.Env):
 
     def get_state(self) -> float:
         return np.round(self._player_money, decimals=2)
+
+    def get_legal_actions(self) -> List[int]:
+        if self._finished:
+            return []
+        return list(range(0, self._player_money + 1))

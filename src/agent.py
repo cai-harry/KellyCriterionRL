@@ -37,6 +37,7 @@ class Agent:
     def act(self,
             state_idx: int,
             explore_probability: float = 0) -> int:
+        # TODO: hacky. should use env.get_legal_actions()
         explore = np.random.random() < explore_probability
         if explore:
             action = np.random.randint(0, state_idx + 1)
