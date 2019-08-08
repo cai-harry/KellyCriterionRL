@@ -3,6 +3,22 @@ import sys
 from src import Environment
 
 
+class KellyAgent:
+    """
+    An agent which always acts according to the Kelly Criterion.
+    """
+
+    def act(self, env: Environment):
+
+        # assuming infinite prize money potential
+        kelly_bet = int(0.2 * env.get_state())
+
+        # min amount necessary to finish the game if the bet wins
+        one_step_win_bet = int(env._MAX_MONEY - env.get_state())
+
+        return min(kelly_bet, one_step_win_bet)
+
+
 class UserAgent:
     """
     An console agent that asks the user to type in bet sizes.
