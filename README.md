@@ -1,6 +1,11 @@
 # KellyCriterionRL
 
-[![Build status](https://travis-ci.com/cai-harry/KellyCriterion.svg?master)](https://travis-ci.com/cai-harry)
+A toy project I worked on while learning about Reinforcement Learning.
+
+[![Build status](https://travis-ci.com/cai-harry/KellyCriterionRL.svg?master)](https://travis-ci.com/cai-harry)
+
+## What's the Kelly Criterion?
+
 
 From [Wikipedia](https://en.wikipedia.org/wiki/Kelly_criterion):
 
@@ -12,31 +17,44 @@ The above paragraph described a bankroll management problem, gave metrics to how
 
 I wondered if a reinforcement learning agent could be trained to perform better at this game than the participants of this study; or if it would work out the optimal strategy (Kelly Criterion) for itself, without being explicitly programmed.
 
+This repo contains:
+
+- [An implementation of the described betting game](src/environment.py). The class conforms to the [OpenAI Gym API](https://github.com/openai/gym), so can be loaded as a gym environment (however, I do not intend to publish it as a PyPI package.)
+
+- [A Monte Carlo Q-learning agent to be trained in this environment.](src/agent.py)
+
+- [Unit tests for both the above](tests)
+
+- [An interface to the environment for human users](src/user_agent.py)
+
+- [An example Jupyter notebook to run training](notebooks/train_example.ipynb)
+
+- [Notebooks from past training runs](notebooks)
+
+## What's the conclusion?
+
+Every time I've run training, the agent tends to do the same thing - something roughly like this:
+
+![Learned policy August 7th 2019](.README_images/2019-08-07-learned-policy.png)
+
+In particular - because the game ends at $250, any time the agent gets to a point where it could reach $250 with one bet, it always bets an amount that it could do so.
+
+The Kelly Criterion only describes what the optimal behaviour is for an infinite number of bets and no upper limit on total winnings, so who knows what the optimal behaviour for this game _actually_ is.
+
+Whatever the optimal behaviour is though, it doesn't seem to be this. [In a simulation of 100,000 episodes](notebooks/2019-08-07.ipynb), following the policy from the blue line drastically outperformed the trained agent (red line).
+
+**This hasn't worked very well but in future, perhaps other RL algorithms could be used to get better results. I've only experimented with simple Monte Carlo Q-learning so far.**
+
 ## Training runs
+
+### 7th August 2019
+
+See [this notebook](notebooks/2019-08-07.ipynb)
 
 ### 6th August 2019
 
 See [this notebook](notebooks/2019-08-06.ipynb)
 
-### 5th August 2019
+### Older training runs
 
-After a training run of 30 million episodes, with randomly sampled starts
-
-![Rewards during training](.README_images/2019-08-05-training-rewards.png)
-
-![State-action pairs evaluated during training](.README_images/2019-08-05-training-n-values.png)
-
-![Learned policy](.README_images/2019-08-05-learned-policy.png)
-
-![Learned Q values](.README_images/2019-08-05-learned-q-values.png)
-
-
-### 2nd August 2019
-
-After an overnight training run of 2 million episodes
-
-![Rewards during training](.README_images/2019-08-02-training-rewards.png)
-
-![Learned policy](.README_images/2019-08-02-learned-policy.png)
-
-![Learned Q values](.README_images/2019-08-02-learned-q-values.png)
+See [`old_training_runs.md`](old_training_runs.md)
